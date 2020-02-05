@@ -96,12 +96,12 @@ public class OrderStateMachine :
 
 An event is something that happened which may result in a state change. An event can add or update instance data, as well as changing an instance's current state. The `Event<T>` is generic, where `T` must be a valid message type.
 
-In the example below, the _SubmitOrder_ message is declared as an event including how to correlate the event to an instance.
+In the example below, the _OrderSubmitted_ message is declared as an event including how to correlate the event to an instance.
 
 > Unless events implement `CorrelatedBy<Guid>`, they must be declared with a correlation expression.
 
 ```cs
-public interface SubmitOrder
+public interface OrderSubmitted
 {
     Guid OrderId { get; }    
 }
@@ -111,10 +111,10 @@ public class OrderStateMachine :
 {
     public OrderStateMachine()
     {
-        Event(() => SubmitOrder, x => x.CorrelateById(context => context.Message.OrderId));
+        Event(() => OrderSubmitted, x => x.CorrelateById(context => context.Message.OrderId));
     }
 
-    public Event<SubmitOrder> SubmitOrder { get; private set; }
+    public Event<OrderSubmitted> OrderSubmitted { get; private set; }
 }
 ```
 
@@ -122,7 +122,7 @@ public class OrderStateMachine :
 
 Behavior is what happens when an _event_ occurs during a _state_. 
 
-Below, the _Initially_ block is used to define the behavior of the _SubmitOrder_ event during the _Initial_ state. When a _SubmitOrder_ message is consumed and an instance with a _CorrelationId_ matching the _OrderId_ is not found, a new instance will be created in the _Initial_ state. The _TransitionTo_ activity transitions the instance to the _Submitted_ state, after which the instance is persisted using the saga repository.
+Below, the _Initially_ block is used to define the behavior of the _OrderSubmitted_ event during the _Initial_ state. When a _OrderSubmitted_ message is consumed and an instance with a _CorrelationId_ matching the _OrderId_ is not found, a new instance will be created in the _Initial_ state. The _TransitionTo_ activity transitions the instance to the _Submitted_ state, after which the instance is persisted using the saga repository.
 
 ```cs
 public class OrderStateMachine :
@@ -131,7 +131,7 @@ public class OrderStateMachine :
     public OrderStateMachine()
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .TransitionTo(Submitted));
     }
 }
@@ -165,7 +165,7 @@ public class OrderStateMachine :
 
 Message brokers typically do not guarantee message order. Therefore, it is important to consider out-of-order messages in state machine design.
 
-In the example above, receiving a _SubmitOrder_ message after an _OrderAccepted_ event could cause the _SubmitOrder_ message to end up in the *_error* queue. If the _OrderAccepted_ event is received first, it would be discarded since it isn't accepted in the _Initial_ state. Below is an updated state machine that handles both of these scenarios.
+In the example above, receiving a _OrderSubmitted_ message after an _OrderAccepted_ event could cause the _OrderSubmitted_ message to end up in the *_error* queue. If the _OrderAccepted_ event is received first, it would be discarded since it isn't accepted in the _Initial_ state. Below is an updated state machine that handles both of these scenarios.
 
 
 ```cs
@@ -175,7 +175,7 @@ public class OrderStateMachine :
     public OrderStateMachine()
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .TransitionTo(Submitted),
             When(OrderAccepted)
                 .TransitionTo(Accepted));
@@ -185,15 +185,15 @@ public class OrderStateMachine :
                 .TransitionTo(Accepted));
 
         During(Accepted,
-            Ignore(SubmitOrder));
+            Ignore(OrderSubmitted));
     }
 }
 ```
 
-In the updated example, receiving a _SubmitOrder_ message while in an _Accepted_ state ignores the event. However, data in the event may be useful. In that case, adding behavior to copy the data to the instance could be added. Below, data from the event is captured in both scenarios.
+In the updated example, receiving a _OrderSubmitted_ message while in an _Accepted_ state ignores the event. However, data in the event may be useful. In that case, adding behavior to copy the data to the instance could be added. Below, data from the event is captured in both scenarios.
 
 ```cs
-public interface SubmitOrder
+public interface OrderSubmitted
 {
     Guid OrderId { get; }
 
@@ -215,7 +215,7 @@ public class OrderStateMachine :
     public OrderStateMachine()
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .Then(x => x.Instance.OrderDate = x.Data.OrderDate)
                 .TransitionTo(Submitted),
             When(OrderAccepted)
@@ -226,7 +226,7 @@ public class OrderStateMachine :
                 .TransitionTo(Accepted));
 
         During(Accepted,
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .Then(x => x.Instance.OrderDate = x.Data.OrderDate));
     }
 }
@@ -282,7 +282,7 @@ While the event is declared explicitly above, it is not required. The default co
 An alternative is to declare the event correlation, as shown below.
 
 ```cs
-public interface SubmitOrder
+public interface OrderSubmitted
 {    
     Guid OrderId { get; }
 }
@@ -292,14 +292,14 @@ public class OrderStateMachine :
 {
     public OrderStateMachine()
     {
-        Event(() => SubmitOrder, x => x.CorrelateById(context => context.Message.OrderId));
+        Event(() => OrderSubmitted, x => x.CorrelateById(context => context.Message.OrderId));
     }
 
-    public Event<SubmitOrder> SubmitOrder { get; private set; }
+    public Event<OrderSubmitted> OrderSubmitted { get; private set; }
 }
 ```
 
-Since `OrderId` is a `Guid`, it can be used for event correlation. When `SubmitOrder` is accepted in the _Initial_ state, and because the _OrderId_ is a _Guid_, the `CorrelationId` on the new instance is automatically assigned the _OrderId_ value.
+Since `OrderId` is a `Guid`, it can be used for event correlation. When `OrderSubmitted` is accepted in the _Initial_ state, and because the _OrderId_ is a _Guid_, the `CorrelationId` on the new instance is automatically assigned the _OrderId_ value.
 
 To correlate events using another type, additional configuration is required.
 
@@ -346,7 +346,7 @@ public class OrderStateMachine :
     public OrderStateMachine()
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .TransitionTo(Submitted),
             When(OrderAccepted)
                 .TransitionTo(Accepted));
@@ -356,7 +356,7 @@ public class OrderStateMachine :
                 .TransitionTo(Accepted));
 
         During(Accepted,
-            Ignore(SubmitOrder));
+            Ignore(OrderSubmitted));
     }
 }
 ```
@@ -383,7 +383,7 @@ public class OrderStateMachine :
     public OrderStateMachine()
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .TransitionTo(Submitted),
             When(OrderAccepted)
                 .TransitionTo(Accepted));
@@ -392,7 +392,7 @@ public class OrderStateMachine :
             When(OrderAccepted)
                 .TransitionTo(Accepted));
 
-        CompositeEvent(() => OrderReady, x => x.ReadyEventStatus, SubmitOrder, OrderAccepted);
+        CompositeEvent(() => OrderReady, x => x.ReadyEventStatus, OrderSubmitted, OrderAccepted);
 
         DuringAny(
             When(OrderReady)
@@ -403,7 +403,7 @@ public class OrderStateMachine :
 }
 ```
 
-Once the _SubmitOrder_ and _OrderAccepted_ events have been consumed, the _OrderReady_ event will be triggered.
+Once the _OrderSubmitted_ and _OrderAccepted_ events have been consumed, the _OrderReady_ event will be triggered.
 
 ::: warning
 The order of events being declared can impact the order in which they execute. Therefore, it is best to declare composite events at the end of the state machine declaration, after all other events and behaviors are declared. That way, the composite events will be raised _after_ the dependent event behaviors.
@@ -452,7 +452,7 @@ In this example, when a cancel order request is consumed without a matching inst
 To increase new instance performance, configuring an event to directly insert into a saga repository may reduce lock contention. To configure an event to insert, it should be in the _Initially_ block, as well as have a saga factory specified.
 
 ```cs
-public interface SubmitOrder
+public interface OrderSubmitted
 {    
     Guid OrderId { get; }
 }
@@ -462,7 +462,7 @@ public class OrderStateMachine :
 {
     public OrderStateMachine()
     {
-        Event(() => SubmitOrder, e => 
+        Event(() => OrderSubmitted, e => 
         {
             e.CorrelateById(context => context.Message.OrderId));
 
@@ -474,11 +474,11 @@ public class OrderStateMachine :
         });
 
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .TransitionTo(Submitted));
     }
 
-    public Event<SubmitOrder> SubmitOrder { get; private set; }
+    public Event<OrderSubmitted> OrderSubmitted { get; private set; }
 }
 ```
 
@@ -509,7 +509,7 @@ public class OrderStateMachine :
         });
 
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .TransitionTo(Submitted));
     }
 
@@ -612,7 +612,7 @@ public class OrderStateMachine :
     public OrderStateMachine()
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .Publish(context => (OrderSubmitted)new OrderSubmittedEvent(context.Instance.CorrelationId))
                 .TransitionTo(Submitted));
     }
@@ -633,7 +633,7 @@ public class OrderStateMachine :
     public OrderStateMachine()
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .PublishAsync(context => context.Init<OrderSubmitted>(new { OrderId = context.Instance.CorrelationId }))
                 .TransitionTo(Submitted));
     }
@@ -667,7 +667,7 @@ public class OrderStateMachine :
     public OrderStateMachine(OrderStateMachineSettings settings)
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .Send(settings.AccountServiceAddress, context => new UpdateAccountHistoryCommand(context.Instance.CorrelationId))
                 .TransitionTo(Submitted));
     }
@@ -688,7 +688,7 @@ public class OrderStateMachine :
     public OrderStateMachine(OrderStateMachineSettings settings)
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .SendAsync(settings.AccountServiceAddress, context => context.Init<UpdateAccountHistory>(new { OrderId = context.Instance.CorrelationId }))
                 .TransitionTo(Submitted));
     }
@@ -959,7 +959,7 @@ To create an activity, create a class that implements `IActivity<TInstance, TDat
 
 ```cs
 public class PublishOrderSubmittedActivity :
-    Activity<OrderState, SubmitOrder>
+    Activity<OrderState, OrderSubmitted>
 {
     readonly ConsumeContext _context;
 
@@ -978,7 +978,7 @@ public class PublishOrderSubmittedActivity :
         visitor.Visit(this);
     }
 
-    public async Task Execute(BehaviorContext<OrderState, SubmitOrder> context, Behavior<OrderState, SubmitOrder> next)
+    public async Task Execute(BehaviorContext<OrderState, OrderSubmitted> context, Behavior<OrderState, OrderSubmitted> next)
     {
         // do the activity thing
         await _context.Publish<OrderSubmitted>(new { OrderId = context.Instance.CorrelationId }).ConfigureAwait(false);
@@ -987,7 +987,7 @@ public class PublishOrderSubmittedActivity :
         await next.Execute(context).ConfigureAwait(false);
     }
 
-    public Task Faulted<TException>(BehaviorExceptionContext<OrderState, SubmitOrder, TException> context, Behavior<OrderState, SubmitOrder> next)
+    public Task Faulted<TException>(BehaviorExceptionContext<OrderState, OrderSubmitted, TException> context, Behavior<OrderState, OrderSubmitted> next)
         where TException : Exception
     {
         return next.Faulted(context);
@@ -1009,14 +1009,14 @@ public class OrderStateMachine :
     public OrderStateMachine()
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .Activity(x => x.OfType<PublishOrderSubmittedActivity>())
                 .TransitionTo(Submitted));
     }
 }
 ```
 
-When the `SubmitOrder` event is consumed, the state machine will resolve the activity from the container, and call the `Execute` method. The activity will be scoped, so any dependencies will be resolved within the message `ConsumeContext`.
+When the `OrderSubmitted` event is consumed, the state machine will resolve the activity from the container, and call the `Execute` method. The activity will be scoped, so any dependencies will be resolved within the message `ConsumeContext`.
 
 In the above example, the event type was known in advance. If an activity for any event type is needed, it can be created without specifying the event type. 
 
@@ -1083,7 +1083,7 @@ public class OrderStateMachine :
     public OrderStateMachine()
     {
         Initially(
-            When(SubmitOrder)
+            When(OrderSubmitted)
                 .Activity(x => x.OfInstanceType<PublishOrderSubmittedActivity>())
                 .TransitionTo(Submitted));
     }
